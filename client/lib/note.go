@@ -229,3 +229,19 @@ func SyncGit() {
 		}
 	}
 }
+
+func RemoveFile(fileName string) {
+	if isIndexString(fileName) {
+		Map := shell.GetKeyMap(StorePath)
+		fileName = Map[fileName]
+	} else {
+		fileName = StorePath + fileName
+	}
+	err := os.Remove(fileName)
+	if err != nil {
+		shell.Log(err)
+		return
+	}
+	CommitGit("删除文件:" + fileName)
+	fmt.Println("文件删除成功！")
+}

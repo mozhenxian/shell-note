@@ -50,6 +50,8 @@ func main() {
 		lib.SyncGit()
 	case "pull":
 		lib.PullGit()
+	case "rm":
+		lib.RemoveFile(parma)
 	default:
 		lib.Edit(action)
 	}
