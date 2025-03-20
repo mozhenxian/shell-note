@@ -1,0 +1,9 @@
+app:
+  db: "/Users/mo/WorkStation/go/note/db 修改为自己本地地址"
+  editor: "vim"
+
+github:
+  url: "github/gitee 修改为私人仓库地址"
+  user: "username"
+  password: "token/password"
+  branch: "main"

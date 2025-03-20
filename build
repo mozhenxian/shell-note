@@ -1,0 +1,1 @@
+go build -ldflags "-X 'main.BuildTime=$(date +"%Y-%m-%d %H:%M:%S")'" -o note client/main.go
