@@ -28,6 +28,10 @@
 4. 执行 note 即可显示使用方法
 
 5. 效果图
-   
+
+   <img width="950" alt="image" src="https://github.com/user-attachments/assets/df44d456-9570-4a20-b937-f5bc9b360edb" />
+
    <img width="578" alt="image" src="https://github.com/user-attachments/assets/2fe1ea5f-4031-4dc2-86f0-bb6c2117bdfd" />
+   <img width="651" alt="image" src="https://github.com/user-attachments/assets/73377457-39cd-4181-9c0d-10baca863028" />
+
 
