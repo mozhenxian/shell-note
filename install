@@ -1,4 +1,5 @@
 ./build
 # ln -s /Users/chunheguo/WorkStation/go/note/note /usr/local/bin/note #开发使用这个方便调试
 cp note /usr/local/bin/note
+./note init
 cp ./cfg/note_config.yaml /etc/note_config.yaml
