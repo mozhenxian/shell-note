@@ -3,7 +3,7 @@
 
 1. 本地运行所需go >= 1.23.5
    
-2. 修改cfg/config.yaml 文件
+2. 修改cfg/note_config.yaml 文件
    
   app:  
   
