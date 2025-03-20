@@ -237,7 +237,8 @@ func RemoveFile(fileName string) {
 	} else {
 		fileName = StorePath + fileName
 	}
-	err := os.Remove(fileName)
+
+	err := os.RemoveAll(fileName)
 	if err != nil {
 		shell.Log(err)
 		return
