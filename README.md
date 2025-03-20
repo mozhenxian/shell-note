@@ -26,3 +26,8 @@
 3. 执行 sudo ./install
 
 4. 执行 note 即可显示使用方法
+
+5. 效果图
+   
+   <img width="578" alt="image" src="https://github.com/user-attachments/assets/2fe1ea5f-4031-4dc2-86f0-bb6c2117bdfd" />
+
