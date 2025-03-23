@@ -230,6 +230,15 @@ func SyncGit() {
 	}
 }
 
+func ShowLog() {
+	g, err := git.NewClient(StorePath, RemoteURL, "")
+	if err != nil {
+		shell.Log(err)
+		return
+	}
+	g.ShowLog()
+}
+
 func RemoveFile(fileName string) {
 	if isIndexString(fileName) {
 		Map := shell.GetKeyMap(StorePath)

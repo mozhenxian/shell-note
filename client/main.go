@@ -52,6 +52,8 @@ func main() {
 		lib.PullGit()
 	case "rm":
 		lib.RemoveFile(parma)
+	case "log":
+		lib.ShowLog()
 	default:
 		lib.Edit(action)
 	}
