@@ -54,6 +54,8 @@ func main() {
 		lib.RemoveFile(parma)
 	case "log":
 		lib.ShowLog()
+	case "lz":
+		shell.Find(parma)
 	default:
 		lib.Edit(action)
 	}
