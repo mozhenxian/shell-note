@@ -3,9 +3,9 @@ package shell
 import (
 	"fmt"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 )
 
 type FileInfo struct {
@@ -17,68 +17,69 @@ type BySize []FileInfo
 
 func (a BySize) Len() int           { return len(a) }
 func (a BySize) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a BySize) Less(i, j int) bool { return a[i].Size > a[j].Size } // 降序排序
+func (a BySize) Less(i, j int) bool { return a[i].Size > a[j].Size }
 
 func Find(root string) {
+	var (
+		files    []FileInfo
+		dirSizes = make(map[string]int64) // 存储目录最终大小
+	)
 
-	var files []FileInfo
-	var dirs []FileInfo
-
-	// 遍历目录
+	// 第一阶段：收集文件并构建目录树
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			//fmt.Printf("Error accessing path %q: %v\n", path, err)
+		if err != nil || path == root {
 			return nil
 		}
 
-		info, err := d.Info()
-		if err != nil {
+		if d.IsDir() {
+			dirSizes[path] = 0 // 初始化目录
 			return nil
 		}
 
-		if !d.IsDir() {
+		// 处理文件
+		if info, err := d.Info(); err == nil {
 			files = append(files, FileInfo{Path: path, Size: info.Size()})
-		} else {
-			// 计算目录大小
-			dirSize, err := getDirSize(path)
-			if err != nil {
-				return nil
-			}
-			dirs = append(dirs, FileInfo{Path: path, Size: dirSize})
-		}
 
+			// 累加文件到所有父目录
+			current := filepath.Dir(path)
+			for {
+				dirSizes[current] += info.Size()
+				parent := filepath.Dir(current)
+				if parent == current || !strings.HasPrefix(current, root) {
+					break
+				}
+				current = parent
+			}
+		}
 		return nil
 	})
 
 	if err != nil {
-		fmt.Printf("Error walking the path %q: %v\n", root, err)
-		os.Exit(1)
+		fmt.Printf("Error: %v\n", err)
+		return
 	}
 
-	// 排序
-	sort.Sort(BySize(files))
-	sort.Sort(BySize(dirs))
+	// 第二阶段：后序遍历计算目录大小
+	var dirList []FileInfo
+	for dir := range dirSizes {
+		dirList = append(dirList, FileInfo{Path: dir, Size: dirSizes[dir]})
+	}
+	sort.Sort(BySize(dirList))
 
-	// 打印结果
+	// 取前10的目录（如果不足则全取）
+	if len(dirList) > 10 {
+		dirList = dirList[:10]
+	}
+
+	// 排序文件
+	sort.Sort(BySize(files))
+
+	// 输出结果
 	fmt.Println("\nTop 10 largest files:")
 	printTop10(files)
 
 	fmt.Println("\nTop 10 largest directories:")
-	printTop10(dirs)
-}
-
-func getDirSize(path string) (int64, error) {
-	var size int64
-	err := filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil
-		}
-		if !info.IsDir() {
-			size += info.Size()
-		}
-		return nil
-	})
-	return size, err
+	printTop10(dirList)
 }
 
 func printTop10(items []FileInfo) {
