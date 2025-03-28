@@ -1,12 +1,10 @@
 package main
 
 import (
-	"fmt"
 	"note/client/lib"
 	"note/shell"
 	"os"
 	"os/exec"
-	"time"
 )
 
 func main() {
@@ -57,10 +55,7 @@ func main() {
 	case "log":
 		lib.ShowLog()
 	case "lz":
-		now := time.Now()
 		shell.Find(parma)
-		t := time.Since(now)
-		fmt.Println(t)
 	default:
 		lib.Edit(action)
 	}
