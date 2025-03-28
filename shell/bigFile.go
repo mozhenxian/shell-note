@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 )
 
 type FileInfo struct {
@@ -34,6 +35,9 @@ func Find(root string) {
 		log.Fatal(err)
 	}
 	wg := &sync.WaitGroup{}
+	// 创建一个通道用于控制耗时显示的退出
+	done := make(chan struct{})
+	go timePass(done)
 
 	for _, entry := range entries {
 		path := filepath.Join(root, entry.Name())
@@ -60,6 +64,7 @@ func Find(root string) {
 
 	// 排序文件
 	sort.Sort(BySize(files))
+	close(done)
 
 	// 输出结果
 	fmt.Println("\n" + BrightCyan + "Top 10 largest files:" + ResetAll)
@@ -69,16 +74,32 @@ func Find(root string) {
 	printTop10(dirList, root)
 }
 
+func timePass(done chan struct{}) {
+	start := time.Now()
+	for {
+		select {
+		case <-done:
+			return // 收到退出信号时结束协程
+		default:
+			// 计算已耗时（保留1位小数）
+			elapsed := time.Since(start).Seconds()
+			// \r 表示覆盖当前行，%.1f 保留1位小数
+			fmt.Printf("\r耗时: \033[31m%.1f seconds\033[0m", elapsed)
+			time.Sleep(100 * time.Millisecond) // 刷新间隔
+		}
+	}
+}
+
 func setFileSize(path string) {
 	fileInfo, err := os.Stat(path)
 	if err != nil {
-		fmt.Printf("获取文件信息失败: %v\n", err)
+		//fmt.Printf("获取文件信息失败: %v\n", err)
 		return
 	}
 
 	// 判断是否为文件
 	if !fileInfo.Mode().IsRegular() {
-		fmt.Println("这不是一个普通文件")
+		//fmt.Println("这不是一个普通文件")
 		return
 	}
 
@@ -136,7 +157,11 @@ func printTop10(items []FileInfo, root string) {
 
 	fmt.Printf(BrightYellow)
 	for i := 0; i < count; i++ {
-		fmt.Printf("%d. %s - %s\n", i+1, formatSize(items[i].Size), strings.TrimPrefix(items[i].Path, root))
+		path := strings.TrimPrefix(items[i].Path, root)
+		if path == "" {
+			path = root
+		}
+		fmt.Printf("%d. %s - %s\n", i+1, formatSize(items[i].Size), path)
 	}
 	fmt.Printf(ResetAll)
 }
