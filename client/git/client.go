@@ -26,6 +26,7 @@ var HelpStr = "使用方法:" +
 	"\n	note push // 推送到github仓库" +
 	"\n	note rm fileName // 删除目录/文件" +
 	"\n	note log // 查看仓库提交日志" +
+	"\n	note lz path // 查看path目录下大文件" +
 	""
 
 type GitHubClient struct {
