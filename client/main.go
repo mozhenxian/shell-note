@@ -56,8 +56,6 @@ func main() {
 		lib.ShowLog()
 	case "lz":
 		shell.Find(parma)
-	case "l2":
-		shell.Search(parma)
 	default:
 		lib.Edit(action)
 	}

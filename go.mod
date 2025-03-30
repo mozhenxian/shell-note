@@ -6,6 +6,7 @@ require (
 	github.com/alecthomas/chroma v0.10.0
 	github.com/creack/pty v1.1.24
 	github.com/go-git/go-git/v5 v5.14.0
+	github.com/panjf2000/ants/v2 v2.11.2
 	gopkg.in/yaml.v2 v2.4.0
 )
 
@@ -28,6 +29,7 @@ require (
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
 	golang.org/x/crypto v0.35.0 // indirect
 	golang.org/x/net v0.35.0 // indirect
+	golang.org/x/sync v0.11.0 // indirect
 	golang.org/x/sys v0.30.0 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 )

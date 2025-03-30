@@ -2,8 +2,10 @@ package shell
 
 import (
 	"fmt"
+	"github.com/panjf2000/ants/v2"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -28,11 +30,17 @@ var (
 	dirSizes     = make(map[string]int64) // 存储目录最终大小
 	dirSizeMutex sync.Mutex
 	enterDir     = "./"
+	pool         *ants.Pool
 )
 
 func Find(root string) {
-	enterDir = root
+	enterDir = filepath.Dir(root)
+	fmt.Println(enterDir)
 	wg := &sync.WaitGroup{}
+
+	// 创建协程池
+	pool, _ = ants.NewPool(runtime.NumCPU() * 100)
+
 	// 创建一个通道用于控制耗时显示的退出
 	done := make(chan struct{})
 	go timePass(done)
@@ -92,6 +100,8 @@ func doWalkDir(root string, wg *sync.WaitGroup) {
 	}
 	defer syscall.Close(fd)
 
+	var subDirs []string
+	var dirSize int64
 	var buf [32 * 1024]byte
 	for {
 		n, err := syscall.ReadDirent(fd, buf[:])
@@ -116,34 +126,50 @@ func doWalkDir(root string, wg *sync.WaitGroup) {
 
 			path := filepath.Join(root, name)
 			if dirent.Type == syscall.DT_DIR {
-				dirSizeMutex.Lock()
-				dirSizes[path] = 0 // 初始化目录
-				dirSizeMutex.Unlock()
-				wg.Add(1)
-				go doWalkDir(path, wg)
-				continue
+				subDirs = append(subDirs, path)
+				//go doWalkDir(path, wg)
 			} else {
 				info, err := os.Stat(path)
 				if err != nil {
-					return
+					continue
 				}
 
 				files = append(files, FileInfo{Path: path, Size: info.Size()})
 
-				current := root // filepath.Dir(path)
-				for {
-					dirSizeMutex.Lock()
-					dirSizes[current] += info.Size()
-					dirSizeMutex.Unlock()
-					parent := filepath.Dir(current)
-					//fmt.Println(current, parent)
-					if current == enterDir {
-						break
-					}
-					current = parent
-				}
+				dirSize += info.Size()
 			}
 		}
+
+	}
+	//fmt.Println("\n" + BrightGreen + root + " size: " + ResetAll + BrightGreen + fmt.Sprintf("%d", len(subDirs)) + ResetAll)
+	// 批量处理子目录
+	if len(subDirs) > 0 {
+		for _, subDir := range subDirs {
+			dir := subDir // 创建新变量,防止闭包问题
+			wg.Add(1)
+			//go doWalkDir(dir, wg)
+			err = pool.Submit(func() {
+				doWalkDir(dir, wg)
+			})
+
+			if err != nil {
+				return
+			}
+		}
+		//subDirs = subDirs[:0] // 清空切片，避免重复分配内存
+	}
+	// 计算目录大小
+	current := root // filepath.Dir(path)
+	for {
+		dirSizeMutex.Lock()
+		dirSizes[current] += dirSize
+		dirSizeMutex.Unlock()
+		parent := filepath.Dir(current)
+		//fmt.Println(current, parent)
+		if parent == enterDir {
+			break
+		}
+		current = parent
 	}
 
 }
