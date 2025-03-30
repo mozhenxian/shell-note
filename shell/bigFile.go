@@ -3,7 +3,6 @@ package shell
 import (
 	"fmt"
 	"github.com/panjf2000/ants/v2"
-	"os"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -27,6 +26,7 @@ func (a BySize) Less(i, j int) bool { return a[i].Size > a[j].Size }
 
 var (
 	files        []FileInfo
+	filesMutex   sync.Mutex
 	dirSizes     = make(map[string]int64) // 存储目录最终大小
 	dirSizeMutex sync.Mutex
 	enterDir     = "./"
@@ -37,6 +37,7 @@ func Find(root string) {
 	enterDir = filepath.Dir(root)
 	fmt.Println(enterDir)
 	wg := &sync.WaitGroup{}
+	files = make([]FileInfo, 0, 1_000_000)
 
 	// 创建协程池
 	pool, _ = ants.NewPool(runtime.NumCPU() * 100)
@@ -102,7 +103,8 @@ func doWalkDir(root string, wg *sync.WaitGroup) {
 
 	var subDirs []string
 	var dirSize int64
-	var buf [32 * 1024]byte
+	var buf [128 * 1024]byte
+	subFiles := make([]FileInfo, 0, 100)
 	for {
 		n, err := syscall.ReadDirent(fd, buf[:])
 		if err != nil {
@@ -129,14 +131,15 @@ func doWalkDir(root string, wg *sync.WaitGroup) {
 				subDirs = append(subDirs, path)
 				//go doWalkDir(path, wg)
 			} else {
-				info, err := os.Stat(path)
+				var info syscall.Stat_t
+				err := syscall.Stat(path, &info)
 				if err != nil {
 					continue
 				}
 
-				files = append(files, FileInfo{Path: path, Size: info.Size()})
+				subFiles = append(subFiles, FileInfo{Path: path, Size: info.Size})
 
-				dirSize += info.Size()
+				dirSize += info.Size
 			}
 		}
 
@@ -156,7 +159,15 @@ func doWalkDir(root string, wg *sync.WaitGroup) {
 				return
 			}
 		}
-		//subDirs = subDirs[:0] // 清空切片，避免重复分配内存
+		subDirs = subDirs[:0] // 清空切片，避免重复分配内存
+	}
+
+	// 批量累计到files
+	if len(subFiles) > 0 {
+		filesMutex.Lock()
+		files = append(files, subFiles...)
+		filesMutex.Unlock()
+		subFiles = subFiles[:0] // 清空切片，避免重复分配内存
 	}
 	// 计算目录大小
 	current := root // filepath.Dir(path)
