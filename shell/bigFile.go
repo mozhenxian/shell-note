@@ -2,15 +2,14 @@ package shell
 
 import (
 	"fmt"
-	"github.com/panjf2000/ants/v2"
+	"io/fs"
+	"log"
+	"os"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
-	"unsafe"
 )
 
 type FileInfo struct {
@@ -29,28 +28,28 @@ var (
 	filesMutex   sync.Mutex
 	dirSizes     = make(map[string]int64) // 存储目录最终大小
 	dirSizeMutex sync.Mutex
-	enterDir     = "./"
-	pool         *ants.Pool
 )
 
 func Find(root string) {
-	enterDir = filepath.Dir(root)
-	fmt.Println(enterDir)
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		Log(err)
+		log.Fatal(err)
+	}
 	wg := &sync.WaitGroup{}
-	files = make([]FileInfo, 0, 1_000_000)
-
-	// 创建协程池
-	pool, _ = ants.NewPool(runtime.NumCPU() * 100)
-
 	// 创建一个通道用于控制耗时显示的退出
 	done := make(chan struct{})
 	go timePass(done)
 
-	dirSizeMutex.Lock()
-	dirSizes[root] = 0 // 初始化目录
-	dirSizeMutex.Unlock()
-	wg.Add(1)
-	go doWalkDir(root, wg)
+	for _, entry := range entries {
+		path := filepath.Join(root, entry.Name())
+		if entry.IsDir() {
+			wg.Add(1)
+			go handleDir(path, wg)
+		} else {
+			setFileSize(path)
+		}
+	}
 	wg.Wait()
 
 	// 第二阶段：后序遍历计算目录大小
@@ -77,6 +76,25 @@ func Find(root string) {
 	printTop10(dirList, root)
 }
 
+func handleDir(root string, wg *sync.WaitGroup) {
+	defer wg.Done()
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return
+	}
+
+	for _, entry := range entries {
+		path := filepath.Join(root, entry.Name())
+		if entry.IsDir() {
+			wg.Add(1)
+			go doWalkDir(path, wg)
+		} else {
+			setFileSize(path)
+		}
+	}
+
+}
+
 func timePass(done chan struct{}) {
 	start := time.Now()
 	for {
@@ -93,112 +111,67 @@ func timePass(done chan struct{}) {
 	}
 }
 
-func doWalkDir(root string, wg *sync.WaitGroup) {
-	defer wg.Done()
-	fd, err := syscall.Open(root, syscall.O_RDONLY|syscall.O_DIRECTORY, 0)
+func setFileSize(path string) {
+	fileInfo, err := os.Stat(path)
 	if err != nil {
+		//fmt.Printf("获取文件信息失败: %v\n", err)
 		return
 	}
-	defer syscall.Close(fd)
 
-	var subDirs []string
-	var dirSize int64
-	var buf [128 * 1024]byte
-	subFiles := make([]FileInfo, 0, 100)
-	for {
-		n, err := syscall.ReadDirent(fd, buf[:])
-		if err != nil {
-			return
-		}
-		if n == 0 {
-			break
-		}
-
-		for remain := buf[:n]; len(remain) > 0; {
-			dirent := (*syscall.Dirent)(unsafe.Pointer(&remain[0]))
-			name, ok := parseDirent(dirent, remain)
-			if !ok {
-				break
-			}
-			remain = remain[dirent.Reclen:]
-
-			if name == "." || name == ".." {
-				continue
-			}
-
-			path := filepath.Join(root, name)
-			if dirent.Type == syscall.DT_DIR {
-				subDirs = append(subDirs, path)
-				//go doWalkDir(path, wg)
-			} else {
-				var info syscall.Stat_t
-				err := syscall.Stat(path, &info)
-				if err != nil {
-					continue
-				}
-
-				subFiles = append(subFiles, FileInfo{Path: path, Size: info.Size})
-
-				dirSize += info.Size
-			}
-		}
-
-	}
-	//fmt.Println("\n" + BrightGreen + root + " size: " + ResetAll + BrightGreen + fmt.Sprintf("%d", len(subDirs)) + ResetAll)
-	// 批量处理子目录
-	if len(subDirs) > 0 {
-		for _, subDir := range subDirs {
-			dir := subDir // 创建新变量,防止闭包问题
-			wg.Add(1)
-			//go doWalkDir(dir, wg)
-			err = pool.Submit(func() {
-				doWalkDir(dir, wg)
-			})
-
-			if err != nil {
-				return
-			}
-		}
-		subDirs = subDirs[:0] // 清空切片，避免重复分配内存
+	// 判断是否为文件
+	if !fileInfo.Mode().IsRegular() {
+		//fmt.Println("这不是一个普通文件")
+		return
 	}
 
-	// 批量累计到files
-	if len(subFiles) > 0 {
-		filesMutex.Lock()
-		files = append(files, subFiles...)
-		filesMutex.Unlock()
-		subFiles = subFiles[:0] // 清空切片，避免重复分配内存
-	}
-	// 计算目录大小
-	current := root // filepath.Dir(path)
-	for {
-		dirSizeMutex.Lock()
-		dirSizes[current] += dirSize
-		dirSizeMutex.Unlock()
-		parent := filepath.Dir(current)
-		//fmt.Println(current, parent)
-		if parent == enterDir {
-			break
-		}
-		current = parent
-	}
-
+	// 获取文件大小（单位：字节）
+	fileSize := fileInfo.Size()
+	filesMutex.Lock()
+	files = append(files, FileInfo{Path: path, Size: fileSize})
+	filesMutex.Unlock()
 }
 
-func parseDirent(dirent *syscall.Dirent, buf []byte) (string, bool) {
-	if dirent.Reclen == 0 || int(dirent.Reclen) > len(buf) {
-		return "", false
-	}
-
-	nameBuf := make([]byte, 0, 256)
-	for i := 0; ; i++ {
-		if dirent.Name[i] == 0 {
-			break
+func doWalkDir(root string, wg *sync.WaitGroup) {
+	defer wg.Done()
+	// 第一阶段：收集文件并构建目录树
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || path == root {
+			return nil
 		}
-		nameBuf = append(nameBuf, byte(dirent.Name[i]))
-	}
 
-	return string(nameBuf), true
+		if d.IsDir() {
+			dirSizeMutex.Lock()
+			dirSizes[path] = 0 // 初始化目录
+			dirSizeMutex.Unlock()
+			return nil
+		}
+
+		// 处理文件
+		if info, err := d.Info(); err == nil {
+			filesMutex.Lock()
+			files = append(files, FileInfo{Path: path, Size: info.Size()})
+			filesMutex.Unlock()
+
+			// 累加文件到所有父目录
+			current := filepath.Dir(path)
+			for {
+				dirSizeMutex.Lock()
+				dirSizes[current] += info.Size()
+				dirSizeMutex.Unlock()
+				parent := filepath.Dir(current)
+				if parent == current || !strings.HasPrefix(current, root) {
+					break
+				}
+				current = parent
+			}
+		}
+		return nil
+	})
+
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		return
+	}
 }
 
 func printTop10(items []FileInfo, root string) {
