@@ -39,7 +39,7 @@ type task struct {
 }
 
 func Search() {
-	os.Args = os.Args[1:]
+	//os.Args = os.Args[1:]
 	flag.Parse()
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
