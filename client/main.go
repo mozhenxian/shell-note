@@ -2,6 +2,7 @@ package main
 
 import (
 	"note/client/lib"
+	"note/client/mcp"
 	"note/shell"
 	"os"
 	"os/exec"
@@ -58,6 +59,8 @@ func main() {
 		shell.Find(parma)
 	case "-k":
 		shell.Search()
+	case "mcp":
+		mcp.Exec()
 	default:
 		lib.Edit(action)
 	}
